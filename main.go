@@ -64,7 +64,7 @@ func main() {
 			}
 		}
 
-		log.Printf("found %d auctions (%fs - %fs)", len(filteredGifts), time.Until(earliest).Seconds(), time.Until(latest).Seconds())
+		log.Printf("ound %d auctions (%fs - %fs)", len(filteredGifts), time.Until(earliest).Seconds(), time.Until(latest).Seconds())
 		ch := giftFloorGenerator(filteredGifts, proxies, cfg.RareBackdrops, cfg.ConcurrentRequests)
 		for gf := range ch {
 			if gf.Err != nil {
