@@ -9,7 +9,7 @@ import (
 	"log"
 	"net/url"
 	"regexp"
-	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -140,9 +140,14 @@ func getFloor(proxies []*url.URL, giftName, model, backdrop string, rare_backdro
 	output := re.ReplaceAllString(backdrop, "")
 	filterModel := model
 	filterBackdrop := ""
-	if slices.Contains(rare_backdrops, output) {
-		filterModel = ""
-		filterBackdrop = backdrop
+	lowerOutput := strings.ToLower(output)
+
+	for _, rb := range rare_backdrops {
+		if strings.ToLower(rb) == lowerOutput {
+			filterModel = ""
+			filterBackdrop = backdrop
+			break
+		}
 	}
 
 	client, err := tonnel.New(&tonnel.Options{
