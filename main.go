@@ -95,7 +95,7 @@ func main() {
 			seconds := int(d / time.Second)
 			re := regexp.MustCompile(`\s+`)
 			link := fmt.Sprintf("https://t.me/nft/%s-%d", re.ReplaceAllString(gf.Gift.Name, ""), gf.Gift.GiftNum)
-			msg := fmt.Sprintf("<b>%s</b> <code>#%d</code> (<a href=\"%s\">display</a>)\n\nBid Cost: <b>%f</b> %s\nMin Sell: <b>%f</b> %s\nProfit: <b>%f</b>%% (%f %s)\nEnd in: %02d:%02d:%02d\n\n<a href=\"https://t.me/tonnel_network_bot/gift?startapp=%d\">Link</a>", gf.Gift.Name, gf.Gift.GiftNum, link, bid, gf.Gift.Asset, gf.Floor, gf.Gift.Asset, profitPercentage*100, gf.Floor-bid, gf.Gift.Asset, hours, minutes, seconds, gf.Gift.GiftID)
+			msg := fmt.Sprintf("<a href=\"%s\">%s #%d</a>\n\nBid Cost: <b>%f</b> %s\nMin Sell: <b>%f</b> %s\nProfit: <b>%f</b>%% (%f %s)\nEnd in: %02d:%02d:%02d\n\n<a href=\"https://t.me/tonnel_network_bot/gift?startapp=%d\">Link</a>", link, gf.Gift.Name, gf.Gift.GiftNum, bid, gf.Gift.Asset, gf.Floor, gf.Gift.Asset, profitPercentage*100, gf.Floor-bid, gf.Gift.Asset, hours, minutes, seconds, gf.Gift.GiftID)
 			go tgLogger.SendMessage(context.Background(), msg, true, nil)
 		}
 
