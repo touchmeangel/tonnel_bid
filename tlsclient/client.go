@@ -160,7 +160,9 @@ func (api *TLSClient) Request(method, url string, body *bytes.Reader, headers ma
 			return nil, fmt.Errorf("max retries exceeded")
 		}
 
-		body.Seek(0, io.SeekStart)
+		if body != nil {
+			body.Seek(0, io.SeekStart)
+		}
 
 		if api.forceReconnect {
 			if err := api.Connect(api.RandomProxy()); err != nil {
