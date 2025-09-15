@@ -14,6 +14,16 @@ import (
 	"time"
 )
 
+func shortName(s string) string {
+	re := regexp.MustCompile(`\s+`)
+	return strings.ToLower(re.ReplaceAllString(s, ""))
+}
+
+func removePercentage(model string) string {
+	re := regexp.MustCompile(`\s*\([^)]*%?\)`)
+	return re.ReplaceAllString(model, "")
+}
+
 func main() {
 	cfg, err := config.LoadConfig(".")
 	if err != nil {
@@ -93,8 +103,8 @@ func main() {
 			minutes := int(d / time.Minute)
 			d -= time.Duration(minutes) * time.Minute
 			seconds := int(d / time.Second)
-			re := regexp.MustCompile(`\s+`)
-			link := fmt.Sprintf("https://t.me/nft/%s-%d", re.ReplaceAllString(gf.Gift.Name, ""), gf.Gift.GiftNum)
+
+			link := fmt.Sprintf("https://t.me/nft/%s-%d", shortName(gf.Gift.Name), gf.Gift.GiftNum)
 			msg := fmt.Sprintf("<a href=\"%s\">%s #%d</a>\n\nBid Cost: <b>%f</b> %s\nMin Sell: <b>%f</b> %s\nProfit: <b>%f</b>%% (%f %s)\nEnd in: %02d:%02d:%02d\n\n<a href=\"https://t.me/tonnel_network_bot/gift?startapp=%d\">Link</a>", link, gf.Gift.Name, gf.Gift.GiftNum, bid, gf.Gift.Asset, gf.Floor, gf.Gift.Asset, profitPercentage*100, gf.Floor-bid, gf.Gift.Asset, hours, minutes, seconds, gf.Gift.GiftID)
 			go tgLogger.SendMessage(context.Background(), msg, true, nil)
 		}
@@ -138,12 +148,9 @@ func giftFloorGenerator(gifts []tonnel.Gift, proxies []*url.URL, rare_backdrops 
 }
 
 func getFloor(proxies []*url.URL, giftName, model, backdrop string, rare_backdrops []string) (float64, error) {
-	re := regexp.MustCompile(`\s*\([^)]*%?\)`)
-	output := re.ReplaceAllString(backdrop, "")
 	filterModel := model
 	filterBackdrop := ""
-	lowerOutput := strings.ToLower(output)
-
+	lowerOutput := strings.ToLower(removePercentage(backdrop))
 	for _, rb := range rare_backdrops {
 		if strings.ToLower(rb) == lowerOutput {
 			filterModel = ""
