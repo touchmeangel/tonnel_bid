@@ -170,7 +170,13 @@ func (api *TLSClient) Request(method, url string, body *bytes.Reader, headers ma
 			}
 		}
 
-		request, err := http.NewRequest(method, url, body)
+		var err error
+		var request *http.Request
+		if body == nil {
+			request, err = http.NewRequest(method, url, nil)
+		} else {
+			request, err = http.NewRequest(method, url, body)
+		}
 		if err != nil {
 			return nil, err
 		}
