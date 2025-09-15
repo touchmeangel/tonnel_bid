@@ -99,16 +99,20 @@ func main() {
 				continue
 			}
 
+			portalFloor, err := getPortalFloor(proxies, shortName(gf.Gift.Name), removePercentage(gf.Gift.Model), removePercentage(gf.Gift.Backdrop), cfg.RareBackdrops)
+			portalMsg := ""
+			if err != nil {
+				log.Printf("[%d] warning: %v", gf.Gift.GiftID, err)
+			} else {
+				portalMsg = fmt.Sprintf("Portal Floor: <b>%f</b> TON\n", portalFloor)
+			}
+
 			d := time.Until(end)
 			hours := int(d / time.Hour)
 			d -= time.Duration(hours) * time.Hour
 			minutes := int(d / time.Minute)
 			d -= time.Duration(minutes) * time.Minute
 			seconds := int(d / time.Second)
-			portalMsg := ""
-			if gf.PortalFloor > 0 {
-				portalMsg = fmt.Sprintf("Portal Floor: <b>%f</b> TON\n", gf.PortalFloor)
-			}
 
 			link := fmt.Sprintf("https://t.me/nft/%s-%d", shortName(gf.Gift.Name), gf.Gift.GiftNum)
 			msg := fmt.Sprintf("<a href=\"%s\">%s #%d</a>\n\nBid Cost: <b>%f</b> %s\nMin Sell: <b>%f</b> %s\nProfit: <b>%f</b>%% (%f %s)\n%sEnd in: %02d:%02d:%02d", link, gf.Gift.Name, gf.Gift.GiftNum, bid, gf.Gift.Asset, gf.Floor, gf.Gift.Asset, profitPercentage*100, gf.Floor-bid, gf.Gift.Asset, portalMsg, hours, minutes, seconds)
@@ -126,10 +130,9 @@ func main() {
 }
 
 type GiftWithFloor struct {
-	Gift        tonnel.Gift
-	Floor       float64
-	PortalFloor float64
-	Err         error
+	Gift  tonnel.Gift
+	Floor float64
+	Err   error
 }
 
 func giftFloorGenerator(gifts []tonnel.Gift, proxies []*url.URL, rare_backdrops []string, maxConcurrent int) <-chan GiftWithFloor {
@@ -146,10 +149,10 @@ func giftFloorGenerator(gifts []tonnel.Gift, proxies []*url.URL, rare_backdrops 
 				defer wg.Done()
 
 				sem <- struct{}{}
-				floor, portalFloor, err := getFloor(proxies, g.Name, g.Model, g.Backdrop, rare_backdrops)
+				floor, err := getFloor(proxies, g.Name, g.Model, g.Backdrop, rare_backdrops)
 				<-sem
 
-				out <- GiftWithFloor{Gift: g, Floor: floor, PortalFloor: portalFloor, Err: err}
+				out <- GiftWithFloor{Gift: g, Floor: floor, Err: err}
 			}(g)
 		}
 
@@ -158,7 +161,52 @@ func giftFloorGenerator(gifts []tonnel.Gift, proxies []*url.URL, rare_backdrops 
 	return out
 }
 
-func getFloor(proxies []*url.URL, giftName, model, backdrop string, rare_backdrops []string) (float64, float64, error) {
+func getPortalFloor(proxies []*url.URL, giftName, model, backdrop string, rare_backdrops []string) (float64, error) {
+	filterModel := model
+	filterBackdrop := ""
+	lowerOutput := strings.ToLower(backdrop)
+	for _, rb := range rare_backdrops {
+		if strings.ToLower(rb) == lowerOutput {
+			filterModel = ""
+			filterBackdrop = backdrop
+			break
+		}
+	}
+
+	client, err := portal.New(&portal.Options{
+		Proxies: proxies,
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	portalRes, err := client.GetFloor(giftName)
+	if err != nil {
+		return 0, err
+	}
+	if filterModel != "" {
+		modelFloorStr, ok := portalRes.FloorPrices[giftName].Models[filterModel]
+		if !ok {
+			return 0, fmt.Errorf("no floor for \"%s\" (%s)", filterModel, giftName)
+		}
+		modelFloor, err := strconv.ParseFloat(modelFloorStr, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid floor for \"%s\" (%s): %v", filterModel, giftName, err)
+		}
+		return modelFloor, nil
+	}
+	backdropFloorStr, ok := portalRes.FloorPrices[shortName(giftName)].Models[filterBackdrop]
+	if !ok {
+		return 0, fmt.Errorf("no floor for \"%s\" (%s)", filterBackdrop, giftName)
+	}
+	backdropFloor, err := strconv.ParseFloat(backdropFloorStr, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid floor for \"%s\" (%s): %v", filterBackdrop, giftName, err)
+	}
+	return backdropFloor, nil
+}
+
+func getFloor(proxies []*url.URL, giftName, model, backdrop string, rare_backdrops []string) (float64, error) {
 	filterModel := model
 	filterBackdrop := ""
 	lowerOutput := strings.ToLower(removePercentage(backdrop))
@@ -174,18 +222,22 @@ func getFloor(proxies []*url.URL, giftName, model, backdrop string, rare_backdro
 		Proxies: proxies,
 	})
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
-	portalClient, err := portal.New(&portal.Options{
-		Proxies: proxies,
-	})
+
+	gift, err := client.GetFloor(giftName, filterModel, filterBackdrop)
 	if err != nil {
-		return 0, 0, err
+		return 0, err
+	}
+	if gift == nil {
+		gift, err = client.GetFloor(giftName, "", "")
+		if err != nil {
+			return 0, err
+		}
 	}
 
-	return getGiftAndPortalFloor(client, portalClient, giftName, filterModel, filterBackdrop)
+	return gift.Price, nil
 }
-
 func getGiftAndPortalFloor(
 	client *tonnel.TonnelAPI,
 	portalClient *portal.PortalAPI,
@@ -229,17 +281,7 @@ func getGiftAndPortalFloor(
 	// Process the portal floor
 	if model != "" {
 		// access the floor from portalRes.Floors
-		modelFloorStr, ok := portalRes.Floors.FloorPrices[short].Models[removePercentage(model)]
-		if !ok {
-			log.Printf("[%d] no floor for \"%s\" (%s)\n", gift.GiftID, model, giftName)
-			return gift.Price, 0, nil
-		}
-		modelFloor, err := strconv.ParseFloat(modelFloorStr, 64)
-		if err != nil {
-			log.Printf("[%d] invalid floor for \"%s\" (%s): %v\n", gift.GiftID, model, giftName, err)
-			return gift.Price, 0, nil
-		}
-		return gift.Price, modelFloor, nil
+
 	}
 
 	return gift.Price, 0, nil
