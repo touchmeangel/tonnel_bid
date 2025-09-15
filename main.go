@@ -2,6 +2,7 @@ package main
 
 import (
 	"autobid/config"
+	"autobid/portal"
 	"autobid/telegram"
 	"autobid/tonnel"
 	"context"
@@ -9,6 +10,7 @@ import (
 	"log"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -103,9 +105,13 @@ func main() {
 			minutes := int(d / time.Minute)
 			d -= time.Duration(minutes) * time.Minute
 			seconds := int(d / time.Second)
+			portalMsg := ""
+			if gf.PortalFloor > 0 {
+				portalMsg = fmt.Sprintf("Portal Floor: <b>%f</b> TON\n", gf.PortalFloor)
+			}
 
 			link := fmt.Sprintf("https://t.me/nft/%s-%d", shortName(gf.Gift.Name), gf.Gift.GiftNum)
-			msg := fmt.Sprintf("<a href=\"%s\">%s #%d</a>\n\nBid Cost: <b>%f</b> %s\nMin Sell: <b>%f</b> %s\nProfit: <b>%f</b>%% (%f %s)\nEnd in: %02d:%02d:%02d", link, gf.Gift.Name, gf.Gift.GiftNum, bid, gf.Gift.Asset, gf.Floor, gf.Gift.Asset, profitPercentage*100, gf.Floor-bid, gf.Gift.Asset, hours, minutes, seconds)
+			msg := fmt.Sprintf("<a href=\"%s\">%s #%d</a>\n\nBid Cost: <b>%f</b> %s\nMin Sell: <b>%f</b> %s\nProfit: <b>%f</b>%% (%f %s)\n%sEnd in: %02d:%02d:%02d", link, gf.Gift.Name, gf.Gift.GiftNum, bid, gf.Gift.Asset, gf.Floor, gf.Gift.Asset, profitPercentage*100, gf.Floor-bid, gf.Gift.Asset, portalMsg, hours, minutes, seconds)
 			go tgLogger.SendMessage(context.Background(), msg, true, nil, &telegram.InlineKeyboardMarkup{
 				InlineKeyboard: [][]telegram.InlineKeyboardButton{
 					{{Text: "Buy", URL: fmt.Sprintf("https://t.me/tonnel_network_bot/gift?startapp=%d", gf.Gift.GiftID)}},
@@ -120,9 +126,10 @@ func main() {
 }
 
 type GiftWithFloor struct {
-	Gift  tonnel.Gift
-	Floor float64
-	Err   error
+	Gift        tonnel.Gift
+	Floor       float64
+	PortalFloor float64
+	Err         error
 }
 
 func giftFloorGenerator(gifts []tonnel.Gift, proxies []*url.URL, rare_backdrops []string, maxConcurrent int) <-chan GiftWithFloor {
@@ -139,10 +146,10 @@ func giftFloorGenerator(gifts []tonnel.Gift, proxies []*url.URL, rare_backdrops 
 				defer wg.Done()
 
 				sem <- struct{}{}
-				floor, err := getFloor(proxies, g.Name, g.Model, g.Backdrop, rare_backdrops)
+				floor, portalFloor, err := getFloor(proxies, g.Name, g.Model, g.Backdrop, rare_backdrops)
 				<-sem
 
-				out <- GiftWithFloor{Gift: g, Floor: floor, Err: err}
+				out <- GiftWithFloor{Gift: g, Floor: floor, PortalFloor: portalFloor, Err: err}
 			}(g)
 		}
 
@@ -151,7 +158,7 @@ func giftFloorGenerator(gifts []tonnel.Gift, proxies []*url.URL, rare_backdrops 
 	return out
 }
 
-func getFloor(proxies []*url.URL, giftName, model, backdrop string, rare_backdrops []string) (float64, error) {
+func getFloor(proxies []*url.URL, giftName, model, backdrop string, rare_backdrops []string) (float64, float64, error) {
 	filterModel := model
 	filterBackdrop := ""
 	lowerOutput := strings.ToLower(removePercentage(backdrop))
@@ -167,19 +174,73 @@ func getFloor(proxies []*url.URL, giftName, model, backdrop string, rare_backdro
 		Proxies: proxies,
 	})
 	if err != nil {
-		return 0, err
+		return 0, 0, err
+	}
+	portalClient, err := portal.New(&portal.Options{
+		Proxies: proxies,
+	})
+	if err != nil {
+		return 0, 0, err
 	}
 
-	gift, err := client.GetFloor(giftName, filterModel, filterBackdrop)
+	return getGiftAndPortalFloor(client, portalClient, giftName, filterModel, filterBackdrop)
+}
+
+func getGiftAndPortalFloor(
+	client *tonnel.TonnelAPI,
+	portalClient *portal.PortalAPI,
+	giftName, model, backdrop string,
+) (float64, float64, error) {
+	// First: call client.GetFloor (might need fallback) — this is sequential because portal depends on shortName of gift
+	gift, err := client.GetFloor(giftName, model, backdrop)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	if gift == nil {
 		gift, err = client.GetFloor(giftName, "", "")
 		if err != nil {
-			return 0, err
+			return 0, 0, err
 		}
 	}
+	short := shortName(giftName)
 
-	return gift.Price, nil
+	// Prepare channels to receive results
+	type portalFloorData struct {
+		Floors *portal.FloorPrices // whatever type portal.GetFloor returns
+		Err    error
+	}
+	portalCh := make(chan portalFloorData, 1)
+
+	// Run portal.GetFloor concurrently
+	go func() {
+		pf, err := portalClient.GetFloor(short)
+		portalCh <- portalFloorData{Floors: pf, Err: err}
+	}()
+
+	// Optionally, you could also run some other things concurrently here
+
+	// Wait for portal result
+	portalRes := <-portalCh
+	if portalRes.Err != nil {
+		// if portal fails, return gift price and 0 for portal floor
+		return gift.Price, 0, nil
+	}
+
+	// Process the portal floor
+	if model != "" {
+		// access the floor from portalRes.Floors
+		modelFloorStr, ok := portalRes.Floors.FloorPrices[short].Models[removePercentage(model)]
+		if !ok {
+			log.Printf("[%d] no floor for \"%s\" (%s)\n", gift.GiftID, model, giftName)
+			return gift.Price, 0, nil
+		}
+		modelFloor, err := strconv.ParseFloat(modelFloorStr, 64)
+		if err != nil {
+			log.Printf("[%d] invalid floor for \"%s\" (%s): %v\n", gift.GiftID, model, giftName, err)
+			return gift.Price, 0, nil
+		}
+		return gift.Price, modelFloor, nil
+	}
+
+	return gift.Price, 0, nil
 }
