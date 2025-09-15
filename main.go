@@ -105,8 +105,12 @@ func main() {
 			seconds := int(d / time.Second)
 
 			link := fmt.Sprintf("https://t.me/nft/%s-%d", shortName(gf.Gift.Name), gf.Gift.GiftNum)
-			msg := fmt.Sprintf("<a href=\"%s\">%s #%d</a>\n\nBid Cost: <b>%f</b> %s\nMin Sell: <b>%f</b> %s\nProfit: <b>%f</b>%% (%f %s)\nEnd in: %02d:%02d:%02d\n\n<a href=\"https://t.me/tonnel_network_bot/gift?startapp=%d\">Link</a>", link, gf.Gift.Name, gf.Gift.GiftNum, bid, gf.Gift.Asset, gf.Floor, gf.Gift.Asset, profitPercentage*100, gf.Floor-bid, gf.Gift.Asset, hours, minutes, seconds, gf.Gift.GiftID)
-			go tgLogger.SendMessage(context.Background(), msg, true, nil)
+			msg := fmt.Sprintf("<a href=\"%s\">%s #%d</a>\n\nBid Cost: <b>%f</b> %s\nMin Sell: <b>%f</b> %s\nProfit: <b>%f</b>%% (%f %s)\nEnd in: %02d:%02d:%02d", link, gf.Gift.Name, gf.Gift.GiftNum, bid, gf.Gift.Asset, gf.Floor, gf.Gift.Asset, profitPercentage*100, gf.Floor-bid, gf.Gift.Asset, hours, minutes, seconds)
+			go tgLogger.SendMessage(context.Background(), msg, true, nil, &telegram.InlineKeyboardMarkup{
+				InlineKeyboard: [][]telegram.InlineKeyboardButton{
+					{{Text: "Buy", URL: fmt.Sprintf("https://t.me/tonnel_network_bot/gift?startapp=%d", gf.Gift.GiftID)}},
+				},
+			})
 		}
 
 		t := time.Until(latest)

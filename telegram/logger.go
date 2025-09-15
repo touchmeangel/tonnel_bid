@@ -18,11 +18,24 @@ type TGLogger struct {
 }
 
 type sendMessagePayload struct {
-	Text                  string `json:"text"`
-	ChatID                int64  `json:"chat_id"`
-	ParseMode             string `json:"parse_mode"`
-	ReplyToMessageID      int64  `json:"reply_to_message_id,omitempty"`
-	DisableWebPagePreview bool   `json:"disable_web_page_preview"`
+	Text                  string                `json:"text"`
+	ChatID                int64                 `json:"chat_id"`
+	ParseMode             string                `json:"parse_mode"`
+	ReplyToMessageID      int64                 `json:"reply_to_message_id,omitempty"`
+	DisableWebPagePreview bool                  `json:"disable_web_page_preview"`
+	ReplyMarkup           *InlineKeyboardMarkup `json:"reply_markup,omitempty"`
+}
+
+type InlineKeyboardButton struct {
+	Text string `json:"text"`
+	URL  string `json:"url,omitempty"`
+}
+
+type InlineKeyboardMarkup struct {
+	InlineKeyboard [][]InlineKeyboardButton `json:"inline_keyboard"`
+}
+
+type ReplyMarkup struct {
 }
 
 type tgErrorResponse struct {
@@ -42,12 +55,13 @@ func NewLogger(token string, chatID int64) *TGLogger {
 	}
 }
 
-func (t *TGLogger) SendMessage(ctx context.Context, message string, wait bool, replyTo *int64) error {
+func (t *TGLogger) SendMessage(ctx context.Context, message string, wait bool, replyTo *int64, markup *InlineKeyboardMarkup) error {
 	payload := sendMessagePayload{
 		Text:                  message,
 		ChatID:                t.ChatID,
 		ParseMode:             "HTML",
 		DisableWebPagePreview: true,
+		ReplyMarkup:           markup,
 	}
 	if replyTo != nil {
 		payload.ReplyToMessageID = *replyTo
@@ -81,7 +95,7 @@ func (t *TGLogger) SendMessage(ctx context.Context, message string, wait bool, r
 			log.Printf("FLOOD WAIT 429: retrying after %d seconds...\n", errResp.Parameters.RetryAfter)
 			time.Sleep(time.Duration(errResp.Parameters.RetryAfter) * time.Second)
 			// Retry only once
-			return t.SendMessage(ctx, message, false, replyTo)
+			return t.SendMessage(ctx, message, false, replyTo, markup)
 		}
 	}
 
