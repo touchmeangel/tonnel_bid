@@ -47,8 +47,6 @@ jobs:
           ssh -i ./vps_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
           echo "${{ secrets.DOCKER_PSWD }}" | docker login -u "${{ secrets.DOCKER_NAME }}" --password-stdin
           cd ${{ vars.WORK_DIR }}
-          docker compose stop ${{ vars.SERVICE_NAME }}
-          docker pull ${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}:latest
-          docker compose up -d --no-deps --build ${{ vars.SERVICE_NAME }}
-          docker rmi $(docker images ${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }} --filter "dangling=true" -q) || true
+          docker compose down --rmi all
+          docker compose up -d
           '
