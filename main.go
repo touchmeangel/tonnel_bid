@@ -6,6 +6,7 @@ import (
 	"autobid/telegram"
 	"autobid/tonnel"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/url"
@@ -14,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func shortName(s string) string {
@@ -38,6 +41,21 @@ func main() {
 			log.Fatalf("invalid proxy address: %s\n", err)
 		}
 		proxies = append(proxies, proxy)
+	}
+
+	var rdb *redis.Client = nil
+	if cfg.RdbAddr != "" {
+		rdb = redis.NewClient(&redis.Options{
+			Addr:         cfg.RdbAddr,
+			Password:     cfg.RdbPassword,
+			PoolSize:     10,
+			MinIdleConns: 2,
+			ReadTimeout:  3 * time.Second,
+			WriteTimeout: 3 * time.Second,
+		})
+		if err := rdb.Ping(context.Background()).Err(); err != nil {
+			log.Fatalf("connection to redis failed: %v", err)
+		}
 	}
 
 	tgLogger := telegram.NewLogger(cfg.Token, cfg.ChatID)
@@ -99,7 +117,7 @@ func main() {
 				continue
 			}
 
-			portalFloor, err := getPortalFloor(proxies, shortName(gf.Gift.Name), removePercentage(gf.Gift.Model), removePercentage(gf.Gift.Backdrop), cfg.RareBackdrops)
+			portalFloor, err := getPortalFloor(rdb, proxies, shortName(gf.Gift.Name), removePercentage(gf.Gift.Model), removePercentage(gf.Gift.Backdrop), cfg.RareBackdrops, context.Background())
 			portalMsg := ""
 			if err != nil {
 				log.Printf("[%d] warning: %v", gf.Gift.GiftID, err)
@@ -161,7 +179,7 @@ func giftFloorGenerator(gifts []tonnel.Gift, proxies []*url.URL, rare_backdrops 
 	return out
 }
 
-func getPortalFloor(proxies []*url.URL, giftName, model, backdrop string, rare_backdrops []string) (float64, error) {
+func getPortalFloor(rdb *redis.Client, proxies []*url.URL, giftName, model, backdrop string, rare_backdrops []string, ctx context.Context) (float64, error) {
 	filterModel := model
 	filterBackdrop := ""
 	lowerOutput := strings.ToLower(backdrop)
@@ -173,18 +191,54 @@ func getPortalFloor(proxies []*url.URL, giftName, model, backdrop string, rare_b
 		}
 	}
 
-	client, err := portal.New(&portal.Options{
-		FloodRetries: 1,
-		Proxies:      proxies,
-	})
-	if err != nil {
-		return 0, err
+	var portalRes *portal.FloorPrices
+	if rdb == nil {
+		client, err := portal.New(&portal.Options{
+			FloodRetries: 1,
+			Proxies:      proxies,
+		})
+		if err != nil {
+			return 0, err
+		}
+
+		portalRes, err = client.GetFloor(giftName)
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		key := giftName
+		raw, err := rdb.Get(ctx, key).Result()
+		if err != nil {
+			if err == redis.Nil {
+				client, err := portal.New(&portal.Options{
+					FloodRetries: 1,
+					Proxies:      proxies,
+				})
+				if err != nil {
+					return 0, err
+				}
+
+				portalRes, err = client.GetFloor(giftName)
+				if err != nil {
+					return 0, err
+				}
+				jsonData, err := json.Marshal(portalRes)
+				if err != nil {
+					return 0, err
+				}
+				if _, err := rdb.Set(ctx, key, jsonData, time.Hour*24).Result(); err != nil {
+					return 0, err
+				}
+			} else {
+				return 0, err
+			}
+		} else {
+			if err := json.Unmarshal([]byte(raw), portalRes); err != nil {
+				return 0, err
+			}
+		}
 	}
 
-	portalRes, err := client.GetFloor(giftName)
-	if err != nil {
-		return 0, err
-	}
 	if filterModel != "" {
 		modelFloorStr, ok := portalRes.FloorPrices[giftName].Models[filterModel]
 		if !ok {

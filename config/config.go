@@ -18,9 +18,11 @@ type Config struct {
 	MinProfitTon       float64  `mapstructure:"min_profit_ton"`
 	RareBackdrops      []string `mapstructure:"rare_backdrops"`
 
-	Proxies []string `mapstructure:"proxies"`
-	Token   string   `mapstructure:"token"`
-	ChatID  int64    `mapstructure:"chat_id"`
+	RdbAddr     string   `mapstructure:"redis_addr"`
+	RdbPassword string   `mapstructure:"redis_password"`
+	Proxies     []string `mapstructure:"proxies"`
+	Token       string   `mapstructure:"token"`
+	ChatID      int64    `mapstructure:"chat_id"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -39,6 +41,8 @@ func LoadConfig(path string) (*Config, error) {
 
 	// Enable reading from environment variables
 	viper.AutomaticEnv()
+	viper.BindEnv("redis_addr", "REDIS_ADDR")
+	viper.BindEnv("redis_password", "REDIS_PASSWORD")
 	viper.BindEnv("token", "TOKEN")
 	viper.BindEnv("chat_id", "CHAT_ID")
 
