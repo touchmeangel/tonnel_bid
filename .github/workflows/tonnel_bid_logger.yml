@@ -47,6 +47,31 @@ jobs:
           ssh -i ./vps_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
           echo "${{ secrets.DOCKER_PSWD }}" | docker login -u "${{ secrets.DOCKER_NAME }}" --password-stdin
           cd ${{ vars.WORK_DIR }}
-          docker compose down --rmi all
-          docker compose up -d
+          docker pull "${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}" || true
+          SERVICES=$(docker compose config --services --quiet | while read svc; do
+            img=$(docker compose config | awk "/^services:/,/^$/ {flag=0} /^services:/{flag=1} flag && \$1 == \"$svc:\" { in_svc=1 } in_svc && /image:/ { gsub(/image: */,\"\", \$2); print \$2; break } in_svc && /^[^ ]/ && \$1 !~ /^[ ]/ { in_svc=0 }" | tr -d '\r')
+            if [ "$img" = "${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}" ]; then
+              echo "$svc"
+            fi
+          done)
+
+          if [ -z "$SERVICES" ]; then
+            echo "No services found that use image ${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}"
+            exit 0
+          fi
+
+          echo "Services using ${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}: $SERVICES"
+
+          for svc in $SERVICES; do
+            echo "Stopping service $svc"
+            docker compose stop "$svc" || true
+
+            echo "Recreating $svc with new image"
+            docker compose up -d --no-deps --build "$svc"
+          done
+
+          echo "Cleaning up dangling images for ${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}"
+          docker images "${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}" --filter "dangling=true" --format "{{.ID}}" | xargs --no-run-if-empty docker rmi || true
+
+          echo "Done."
           '
