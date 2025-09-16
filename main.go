@@ -56,6 +56,8 @@ func main() {
 		if err := rdb.Ping(context.Background()).Err(); err != nil {
 			log.Fatalf("connection to redis failed: %v", err)
 		}
+	} else {
+		log.Printf("[warning] no redis connection")
 	}
 
 	tgLogger := telegram.NewLogger(cfg.Token, cfg.ChatID)
