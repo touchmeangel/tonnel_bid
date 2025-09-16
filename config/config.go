@@ -11,6 +11,7 @@ import (
 )
 
 type Config struct {
+	GiftsOffset        uint32   `mapstructure:"gifts_offset"`
 	GiftsPerFetch      uint32   `mapstructure:"gifts_per_fetch"`
 	ConcurrentRequests int      `mapstructure:"concurrent_requests"`
 	MinProfit          float64  `mapstructure:"min_profit"`
@@ -28,11 +29,12 @@ func LoadConfig(path string) (*Config, error) {
 	viper.SetConfigType("json")
 
 	// Set defaults (mirror constants)
+	viper.SetDefault("gifts_offset", 0)
 	viper.SetDefault("gifts_per_fetch", 30)
 	viper.SetDefault("concurrent_requests", 5)
 	viper.SetDefault("min_profit", 0.02)
 	viper.SetDefault("min_profit_ton", 0.0)
-	viper.SetDefault("rare_backdrops", []string{"Black", "Onyx Black"})
+	viper.SetDefault("rare_backdrops", []string{"Black"})
 	viper.SetDefault("proxies", []string{})
 
 	// Enable reading from environment variables

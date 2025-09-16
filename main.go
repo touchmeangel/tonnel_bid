@@ -50,7 +50,7 @@ func main() {
 
 	for {
 		log.Printf("fetching auctions...")
-		gifts, err := client.GetAuctions(1, cfg.GiftsPerFetch)
+		gifts, err := client.GetAuctions(1+cfg.GiftsOffset, cfg.GiftsPerFetch)
 		if err != nil {
 			log.Fatalf("error GetAuctions: %v", err)
 		}
