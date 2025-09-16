@@ -203,7 +203,8 @@ func getPortalFloor(rdb *redis.Client, proxies []*url.URL, expiration time.Durat
 		}
 	}
 
-	var portalRes *portal.FloorPrices
+	var portalFloors portal.FloorPrices
+	var portalResPointer *portal.FloorPrices = &portalFloors
 	if rdb == nil {
 		client, err := portal.New(&portal.Options{
 			FloodRetries: 1,
@@ -213,7 +214,7 @@ func getPortalFloor(rdb *redis.Client, proxies []*url.URL, expiration time.Durat
 			return 0, err
 		}
 
-		portalRes, err = client.GetFloor(giftName)
+		portalResPointer, err = client.GetFloor(giftName)
 		if err != nil {
 			return 0, err
 		}
@@ -230,11 +231,11 @@ func getPortalFloor(rdb *redis.Client, proxies []*url.URL, expiration time.Durat
 					return 0, err
 				}
 
-				portalRes, err = client.GetFloor(giftName)
+				portalResPointer, err = client.GetFloor(giftName)
 				if err != nil {
 					return 0, err
 				}
-				jsonData, err := json.Marshal(portalRes)
+				jsonData, err := json.Marshal(portalResPointer)
 				if err != nil {
 					return 0, err
 				}
@@ -245,14 +246,14 @@ func getPortalFloor(rdb *redis.Client, proxies []*url.URL, expiration time.Durat
 				return 0, err
 			}
 		} else {
-			if err := json.Unmarshal([]byte(raw), portalRes); err != nil {
+			if err := json.Unmarshal([]byte(raw), portalResPointer); err != nil {
 				return 0, err
 			}
 		}
 	}
 
 	if filterModel != "" {
-		modelFloorStr, ok := portalRes.FloorPrices[giftName].Models[filterModel]
+		modelFloorStr, ok := portalResPointer.FloorPrices[giftName].Models[filterModel]
 		if !ok {
 			return 0, fmt.Errorf("no floor for \"%s\" (%s)", filterModel, giftName)
 		}
@@ -262,7 +263,7 @@ func getPortalFloor(rdb *redis.Client, proxies []*url.URL, expiration time.Durat
 		}
 		return modelFloor, nil
 	}
-	backdropFloorStr, ok := portalRes.FloorPrices[shortName(giftName)].Models[filterBackdrop]
+	backdropFloorStr, ok := portalResPointer.FloorPrices[shortName(giftName)].Models[filterBackdrop]
 	if !ok {
 		return 0, fmt.Errorf("no floor for \"%s\" (%s)", filterBackdrop, giftName)
 	}
