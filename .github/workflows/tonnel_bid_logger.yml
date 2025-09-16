@@ -47,16 +47,14 @@ jobs:
           ssh -i ./vps_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
           echo "${{ secrets.DOCKER_PSWD }}" | docker login -u "${{ secrets.DOCKER_NAME }}" --password-stdin
           cd ${{ vars.WORK_DIR }}
-          docker pull "${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}" || true
+          docker pull "${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}:latest" || true
 
-          # Try using yq if available
+          SERVICES=""
           if command -v yq >/dev/null 2>&1; then
             SERVICES=$(docker compose config \
-                        | yq e ".services | to_entries | map(select(.value.image == \"${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}\")) | .[].key" -)
+                        | yq e ".services | to_entries | map(select(.value.image == \"${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}:latest\")) | .[].key" -)
           else
-            # Fallback parsing with bash + grep/sed
             config=$(docker compose config)
-            SERVICES=""
             current_service=""
             inside_services=0
             while IFS= read -r line; do
@@ -70,30 +68,26 @@ jobs:
               fi
               if [[ -n "$current_service" && "$line" =~ ^[[:space:]]{4}image:[[:space:]]*(.*)$ ]]; then
                 img_value=$(echo "$line" | sed -E 's/^[[:space:]]{4}image:[[:space:]]*(.*)$/\1/')
-                if [[ "$img_value" == "${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}" ]]; then
+                if [[ "$img_value" == "${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}:latest" ]]; then
                   SERVICES="$SERVICES $current_service"
                 fi
                 current_service=""
               fi
             done <<< "$config"
           fi
-
+      
           if [[ -z "${SERVICES// /}" ]]; then
-            echo "No services found using image ${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}"
+            echo "No services found using image ${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}:latest"
             exit 0
           fi
-
-          echo "Services using ${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}: ${SERVICES}"
-
+      
+          echo "Services to rebuild: $SERVICES"
           for svc in $SERVICES; do
-            echo "Stopping service $svc"
             docker compose stop "$svc" || true
-
-            echo "Rebuilding and starting service $svc"
             docker compose up -d --no-deps --build "$svc"
           done
-
-          echo "Cleaning up dangling images of ${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}"
-          docker images "${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}" --filter "dangling=true" --format "{{.ID}}" \
+      
+          # Cleanup
+          docker images "${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}:latest" --filter "dangling=true" --format "{{.ID}}" \
             | xargs --no-run-if-empty docker rmi || true
           '
