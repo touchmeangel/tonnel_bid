@@ -2,6 +2,7 @@ package main
 
 import (
 	"autobid/config"
+	"autobid/ip"
 	"autobid/portal"
 	"autobid/telegram"
 	"autobid/tonnel"
@@ -40,6 +41,15 @@ func main() {
 		if err != nil {
 			log.Fatalf("invalid proxy address: %s\n", err)
 		}
+		ipifyClient, err := ip.New(&ip.Options{Proxies: []*url.URL{proxy}})
+		if err != nil {
+			log.Fatalf("failed to connect to api.ipify.org: %s\n", err)
+		}
+		ip, err := ipifyClient.GetIp()
+		if err != nil {
+			log.Fatalf("failed to fetch ip info: %s\n", err)
+		}
+		log.Printf("[%s] %s\n", proxy.String(), ip)
 		proxies = append(proxies, proxy)
 	}
 
