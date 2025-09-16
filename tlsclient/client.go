@@ -27,7 +27,7 @@ type FloodWaitError struct {
 }
 
 func (e *FloodWaitError) Error() string {
-	return fmt.Sprintf("too many requests: status %d, retry after %f secs", e.StatusCode, e.RetryAfter)
+	return fmt.Sprintf("%s too many requests: status %d, retry after %f secs", e.Origin, e.StatusCode, e.RetryAfter)
 }
 
 func SafeURL(base string, params map[string]string) (string, error) {
