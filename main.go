@@ -124,7 +124,7 @@ func main() {
 			if err != nil {
 				log.Printf("[%d] warning: %v", gf.Gift.GiftID, err)
 			} else {
-				portalMsg = fmt.Sprintf("Portal Floor: <b>%f</b> TON\n", portalFloor)
+				portalMsg = fmt.Sprintf("<a href=\"https://t.me/portals/market?startapp=\">Portal Floor: <b>%f</b> TON\n", portalFloor)
 			}
 
 			d := time.Until(end)
