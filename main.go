@@ -174,7 +174,8 @@ func getPortalFloor(proxies []*url.URL, giftName, model, backdrop string, rare_b
 	}
 
 	client, err := portal.New(&portal.Options{
-		Proxies: proxies,
+		FloodRetries: 1,
+		Proxies:      proxies,
 	})
 	if err != nil {
 		return 0, err
