@@ -17,6 +17,7 @@ type Config struct {
 	MinProfit          float64  `mapstructure:"min_profit"`
 	MinProfitTon       float64  `mapstructure:"min_profit_ton"`
 	RareBackdrops      []string `mapstructure:"rare_backdrops"`
+	Expiration         float64  `mapstructure:"expiration"`
 
 	RdbAddr     string   `mapstructure:"redis_addr"`
 	RdbPassword string   `mapstructure:"redis_password"`
@@ -38,6 +39,7 @@ func LoadConfig(path string) (*Config, error) {
 	viper.SetDefault("min_profit_ton", 0.0)
 	viper.SetDefault("rare_backdrops", []string{"Black"})
 	viper.SetDefault("proxies", []string{})
+	viper.SetDefault("expiration", 60*60) // 1 hour
 
 	// Enable reading from environment variables
 	viper.AutomaticEnv()

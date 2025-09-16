@@ -117,7 +117,7 @@ func main() {
 				continue
 			}
 
-			portalFloor, err := getPortalFloor(rdb, proxies, shortName(gf.Gift.Name), removePercentage(gf.Gift.Model), removePercentage(gf.Gift.Backdrop), cfg.RareBackdrops, context.Background())
+			portalFloor, err := getPortalFloor(rdb, proxies, time.Duration(cfg.Expiration*float64(time.Second)), shortName(gf.Gift.Name), removePercentage(gf.Gift.Model), removePercentage(gf.Gift.Backdrop), cfg.RareBackdrops, context.Background())
 			portalMsg := ""
 			if err != nil {
 				log.Printf("[%d] warning: %v", gf.Gift.GiftID, err)
@@ -179,7 +179,7 @@ func giftFloorGenerator(gifts []tonnel.Gift, proxies []*url.URL, rare_backdrops 
 	return out
 }
 
-func getPortalFloor(rdb *redis.Client, proxies []*url.URL, giftName, model, backdrop string, rare_backdrops []string, ctx context.Context) (float64, error) {
+func getPortalFloor(rdb *redis.Client, proxies []*url.URL, expiration time.Duration, giftName, model, backdrop string, rare_backdrops []string, ctx context.Context) (float64, error) {
 	filterModel := model
 	filterBackdrop := ""
 	lowerOutput := strings.ToLower(backdrop)
@@ -226,7 +226,7 @@ func getPortalFloor(rdb *redis.Client, proxies []*url.URL, giftName, model, back
 				if err != nil {
 					return 0, err
 				}
-				if _, err := rdb.Set(ctx, key, jsonData, time.Hour*24).Result(); err != nil {
+				if _, err := rdb.Set(ctx, key, jsonData, expiration).Result(); err != nil {
 					return 0, err
 				}
 			} else {
