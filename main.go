@@ -20,7 +20,7 @@ import (
 )
 
 func shortName(s string) string {
-	re := regexp.MustCompile(`\s+`)
+	re := regexp.MustCompile(`[\s\W]+`)
 	return strings.ToLower(re.ReplaceAllString(s, ""))
 }
 
