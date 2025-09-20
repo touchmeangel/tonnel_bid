@@ -3,6 +3,7 @@ package tonnel
 import (
 	"autobid/tlsclient"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -110,7 +111,7 @@ func (g *Gift) MinBid() float64 {
 	return g.Auction.StartingBid
 }
 
-func (api *TonnelAPI) GetFloor(giftName string, model string, backdrop string) (*Gift, error) {
+func (api *TonnelAPI) GetFloor(ctx context.Context, giftName string, model string, backdrop string) (*Gift, error) {
 	url := "https://rs-gifts.tonnel.network/api/pageGifts"
 
 	headers := make(map[string]string, len(DEFAULT_HEADERS))
@@ -153,7 +154,7 @@ func (api *TonnelAPI) GetFloor(giftName string, model string, backdrop string) (
 	i := uint32(0)
 	t := FLOOD_WAIT
 	for {
-		resp, err = api.conn.Request("POST", url, bytes.NewReader(bodyBytes), headers, 3)
+		resp, err = api.conn.Request(ctx, "POST", url, bytes.NewReader(bodyBytes), headers, 3, 60*time.Second)
 		if err != nil {
 			return nil, err
 		}
@@ -193,7 +194,7 @@ func (api *TonnelAPI) GetFloor(giftName string, model string, backdrop string) (
 	return &gifts[0], nil
 }
 
-func (api *TonnelAPI) GetAuctions(page uint32, limit uint32) ([]Gift, error) {
+func (api *TonnelAPI) GetAuctions(ctx context.Context, page uint32, limit uint32) ([]Gift, error) {
 	url := "https://rs-gifts.tonnel.network/api/pageGifts"
 
 	headers := make(map[string]string, len(DEFAULT_HEADERS))
@@ -219,7 +220,7 @@ func (api *TonnelAPI) GetAuctions(page uint32, limit uint32) ([]Gift, error) {
 	i := uint32(0)
 	t := FLOOD_WAIT
 	for {
-		resp, err = api.conn.Request("POST", url, bytes.NewReader(bodyBytes), headers, 3)
+		resp, err = api.conn.Request(ctx, "POST", url, bytes.NewReader(bodyBytes), headers, 3, 60*time.Second)
 		if err != nil {
 			return nil, err
 		}

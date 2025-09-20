@@ -2,6 +2,7 @@ package ip
 
 import (
 	"autobid/tlsclient"
+	"context"
 	"fmt"
 	"log"
 	"net/url"
@@ -37,7 +38,7 @@ var DEFAULT_HEADERS = map[string]string{
 	"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36",
 }
 
-func (api *IpifyAPI) GetIp() (string, error) {
+func (api *IpifyAPI) GetIp(ctx context.Context) (string, error) {
 	url := "https://api.ipify.org"
 
 	headers := make(map[string]string, len(DEFAULT_HEADERS))
@@ -50,7 +51,7 @@ func (api *IpifyAPI) GetIp() (string, error) {
 	i := uint32(0)
 	t := FLOOD_WAIT
 	for {
-		resp, err = api.conn.Request("GET", url, nil, headers, 3)
+		resp, err = api.conn.Request(ctx, "GET", url, nil, headers, 3, 60*time.Second)
 		if err != nil {
 			return "", err
 		}

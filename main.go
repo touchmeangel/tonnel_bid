@@ -45,7 +45,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to connect to api.ipify.org: %s\n", err)
 		}
-		ip, err := ipifyClient.GetIp()
+		ip, err := ipifyClient.GetIp(context.Background())
 		if err != nil {
 			log.Fatalf("failed to fetch ip info: %s\n", err)
 		}
@@ -80,7 +80,7 @@ func main() {
 
 	for {
 		log.Printf("fetching auctions...")
-		gifts, err := client.GetAuctions(1+cfg.GiftsOffset, cfg.GiftsPerFetch)
+		gifts, err := client.GetAuctions(context.Background(), 1+cfg.GiftsOffset, cfg.GiftsPerFetch)
 		if err != nil {
 			log.Fatalf("error GetAuctions: %v", err)
 		}
@@ -215,7 +215,7 @@ func getPortalFloor(rdb *redis.Client, proxies []*url.URL, expiration time.Durat
 			return 0, err
 		}
 
-		portalResPointer, err = client.GetFloor(giftName)
+		portalResPointer, err = client.GetFloor(context.Background(), giftName)
 		if err != nil {
 			return 0, err
 		}
@@ -232,7 +232,7 @@ func getPortalFloor(rdb *redis.Client, proxies []*url.URL, expiration time.Durat
 					return 0, err
 				}
 
-				portalResPointer, err = client.GetFloor(giftName)
+				portalResPointer, err = client.GetFloor(context.Background(), giftName)
 				if err != nil {
 					return 0, err
 				}
@@ -294,12 +294,12 @@ func getFloor(proxies []*url.URL, giftName, model, backdrop string, rare_backdro
 		return 0, err
 	}
 
-	gift, err := client.GetFloor(giftName, filterModel, filterBackdrop)
+	gift, err := client.GetFloor(context.Background(), giftName, filterModel, filterBackdrop)
 	if err != nil {
 		return 0, err
 	}
 	if gift == nil {
-		gift, err = client.GetFloor(giftName, "", "")
+		gift, err = client.GetFloor(context.Background(), giftName, "", "")
 		if err != nil {
 			return 0, err
 		}

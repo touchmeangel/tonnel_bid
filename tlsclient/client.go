@@ -3,6 +3,7 @@ package tlsclient
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -153,15 +154,31 @@ func (api *TLSClient) DefaultHeaders(r *http.Request) {
 	}
 }
 
-func (api *TLSClient) Request(method, url string, body *bytes.Reader, headers map[string]string, retries uint32) (*RequestResponse, error) {
-	i := uint32(0)
+func (api *TLSClient) Request(
+	ctx context.Context,
+	method, url string,
+	body io.ReadSeeker,
+	headers map[string]string,
+	retries uint32,
+	perAttemptTimeout time.Duration,
+) (*RequestResponse, error) {
+	var i uint32
+
 	for {
 		if i >= retries {
-			return nil, fmt.Errorf("max retries exceeded")
+			return nil, fmt.Errorf("max retries (%d) exceeded", retries)
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
 		}
 
 		if body != nil {
-			body.Seek(0, io.SeekStart)
+			if _, err := body.Seek(0, io.SeekStart); err != nil {
+				return nil, fmt.Errorf("body.Seek start error: %w", err)
+			}
 		}
 
 		if api.forceReconnect {
@@ -192,17 +209,19 @@ func (api *TLSClient) Request(method, url string, body *bytes.Reader, headers ma
 			return r.Bytes()
 		}()
 
+		deadline := time.Now().Add(perAttemptTimeout)
+		api.tlsConn.SetDeadline(deadline)
+
 		if _, err := api.tlsConn.Write(byteRep); err != nil {
 			if IsConnectionAbortedError(err) {
-				log.Printf("INFO: Http Client Reconnect Requested...\n")
+				log.Printf("INFO: Http Client Reconnect Requested after write error: %v\n", err)
 				if err := api.Connect(api.RandomProxy()); err != nil {
 					return nil, err
 				}
-				i += 1
+				i++
 				continue
-			} else {
-				return nil, err
 			}
+			return nil, err
 		}
 
 		reader := bufio.NewReader(api.tlsConn)
@@ -213,14 +232,13 @@ func (api *TLSClient) Request(method, url string, body *bytes.Reader, headers ma
 		err = res.Read(reader)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				log.Printf("INFO: Http Client Reconnect Requested...\n")
+				log.Printf("INFO: Http Client Reconnect Requested after EOF read: %v\n", err)
 				if err := api.Connect(api.RandomProxy()); err != nil {
 					return nil, err
 				}
-				i += 1
+				i++
 				continue
 			}
-
 			return nil, err
 		}
 
@@ -228,7 +246,7 @@ func (api *TLSClient) Request(method, url string, body *bytes.Reader, headers ma
 		full := &RequestResponse{
 			StatusCode: res.StatusCode(),
 			Ok:         Ok(res.StatusCode()),
-			Body:       rawBody,
+			Body:       append([]byte(nil), rawBody...),
 		}
 
 		return full, nil

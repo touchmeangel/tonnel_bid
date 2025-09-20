@@ -2,6 +2,7 @@ package portal
 
 import (
 	"autobid/tlsclient"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -50,7 +51,7 @@ type CollectionFloorPrices struct {
 	Symbols   map[string]string `json:"symbols"`
 }
 
-func (api *PortalAPI) GetFloor(giftName string) (*FloorPrices, error) {
+func (api *PortalAPI) GetFloor(ctx context.Context, giftName string) (*FloorPrices, error) {
 	url, err := tlsclient.SafeURL("https://portals-market.com/api/collections/filters", map[string]string{
 		"short_names": giftName,
 	})
@@ -67,7 +68,7 @@ func (api *PortalAPI) GetFloor(giftName string) (*FloorPrices, error) {
 	i := uint32(0)
 	t := FLOOD_WAIT
 	for {
-		resp, err = api.conn.Request("GET", url, nil, headers, 3)
+		resp, err = api.conn.Request(ctx, "GET", url, nil, headers, 3, 60*time.Second)
 		if err != nil {
 			return nil, err
 		}
