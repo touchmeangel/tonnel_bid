@@ -90,7 +90,10 @@ func main() {
 		for _, g := range gifts {
 			now := time.Now()
 			end := g.Auction.AuctionEndTime
-			if now.After(end) || g.GiftID < 0 {
+			if now.Add(time.Duration(cfg.MinAuctionEnd*float64(time.Second))).After(end) || g.GiftID < 0 {
+				continue
+			}
+			if len(g.Auction.BidHistory) < int(cfg.MinBids) {
 				continue
 			}
 			if end.After(latest) {
