@@ -55,18 +55,36 @@ jobs:
           echo "Pulling latest image: $IMAGE_NAME"
           docker pull "$IMAGE_NAME"
           
-          # Find services using this image
-          if command -v yq >/dev/null 2>&1; then
-            SERVICES=$(docker compose config | yq e ".services | to_entries | map(select(.value.image == \"$IMAGE_NAME\")) | .[].key" - | tr '\n' ' ')
-          else
-            # Fallback: extract from docker compose config
-            SERVICES=$(docker compose config | grep -A 1 "image: $IMAGE_NAME" | grep -B 1 "image:" | grep "^  [a-zA-Z]" | sed 's/://g' | xargs)
+          # Debug: Show compose config
+          echo "Checking docker-compose.yml for services..."
+          docker compose config --services
+          
+          # Find services using this image (more reliable method)
+          SERVICES=$(docker compose config --format json 2>/dev/null | \
+            python3 -c "import sys, json; \
+            data = json.load(sys.stdin); \
+            img = '$IMAGE_NAME'; \
+            services = [k for k, v in data.get('services', {}).items() if v.get('image') == img]; \
+            print(' '.join(services))" 2>/dev/null || echo "")
+          
+          # Fallback: simpler grep method
+          if [[ -z "$SERVICES" ]]; then
+            echo "Trying fallback method..."
+            SERVICES=$(docker compose config | awk -v img="$IMAGE_NAME" '
+              /^  [a-zA-Z0-9_-]+:/ { service=$1; gsub(/:/, "", service) }
+              /^    image:/ && $2 == img { print service }
+            ')
           fi
           
           SERVICES=$(echo "$SERVICES" | xargs)
           
           if [[ -z "$SERVICES" ]]; then
-            echo "⚠️  No services found using image $IMAGE_NAME"
+            echo "⚠️  No services found using image: $IMAGE_NAME"
+            echo "Available services:"
+            docker compose config --services
+            echo ""
+            echo "Checking what images are configured:"
+            docker compose config | grep "image:"
             exit 1
           fi
           
