@@ -24,7 +24,6 @@ jobs:
 
       - name: Push image to DockerHub
         run: docker push ${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}:latest
-  
 
   server-deploy:
     if: github.ref == 'refs/heads/main'
@@ -43,53 +42,44 @@ jobs:
           ssh-keyscan ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
       - name: Connect to VPS and deploy
         run: |
-          ssh -i ./vps_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-            echo "${{ secrets.DOCKER_PSWD }}" | docker login -u "${{ secrets.DOCKER_NAME }}" --password-stdin
-            cd ${{ vars.WORK_DIR }}
-            
-            # Pull the latest image
-            docker pull "${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}:latest"
-      
-            SERVICES=""
-            if command -v yq >/dev/null 2>&1; then
-              SERVICES=$(docker compose config \
-                          | yq e ".services | to_entries | map(select(.value.image == \"${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}:latest\")) | .[].key" -)
-            else
-              config=$(docker compose config)
-              current_service=""
-              inside_services=0
-              while IFS= read -r line; do
-                if [[ $line =~ ^services: ]]; then
-                  inside_services=1
-                  continue
-                fi
-                if [[ $inside_services -eq 1 && "$line" =~ ^[[:space:]]{2}[^[:space:]] ]]; then
-                  current_service=$(echo "$line" | sed -E 's/^[[:space:]]{2}([^:]+):.*/\1/')
-                  continue
-                fi
-                if [[ -n "$current_service" && "$line" =~ ^[[:space:]]{4}image:[[:space:]]*(.*)$ ]]; then
-                  img_value=$(echo "$line" | sed -E 's/^[[:space:]]{4}image:[[:space:]]*(.*)$/\1/')
-                  if [[ "$img_value" == "${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}:latest" ]]; then
-                    SERVICES="$SERVICES $current_service"
-                  fi
-                  current_service=""
-                fi
-              done <<< "$config"
-            fi
-      
-            if [[ -z "${SERVICES// /}" ]]; then
-              echo "No services found using image ${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}:latest"
-              exit 0
-            fi
-      
-            echo "Services to rebuild: $SERVICES"
-            for svc in $SERVICES; do
-              docker compose stop "$svc"
-              docker compose rm -f "$svc"
-              docker compose up -d --no-deps "$svc"
-            done
-      
-            # Cleanup old images
-            docker image prune -f
+          ssh -o StrictHostKeyChecking=accept-new -i ./vps_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+          set -euo pipefail
+          
+          IMAGE_NAME="${{ secrets.DOCKER_NAME }}/${{ vars.IMAGE_NAME }}:latest"
+          
+          echo "Logging into Docker..."
+          echo "${{ secrets.DOCKER_PSWD }}" | docker login -u "${{ secrets.DOCKER_NAME }}" --password-stdin
+          
+          cd ${{ vars.WORK_DIR }}
+          
+          echo "Pulling latest image: $IMAGE_NAME"
+          docker pull "$IMAGE_NAME"
+          
+          # Find services using this image
+          if command -v yq >/dev/null 2>&1; then
+            SERVICES=$(docker compose config | yq e ".services | to_entries | map(select(.value.image == \"$IMAGE_NAME\")) | .[].key" - | tr '\n' ' ')
+          else
+            # Fallback: extract from docker compose config
+            SERVICES=$(docker compose config | grep -A 1 "image: $IMAGE_NAME" | grep -B 1 "image:" | grep "^  [a-zA-Z]" | sed 's/://g' | xargs)
+          fi
+          
+          SERVICES=$(echo "$SERVICES" | xargs)
+          
+          if [[ -z "$SERVICES" ]]; then
+            echo "⚠️  No services found using image $IMAGE_NAME"
+            exit 1
+          fi
+          
+          echo "🔄 Restarting services: $SERVICES"
+          
+          for svc in $SERVICES; do
+            echo "  → Restarting $svc..."
+            docker compose up -d --force-recreate --no-deps "$svc"
+          done
+          
+          echo "🧹 Cleaning up old images..."
+          docker image prune -af --filter "until=24h"
+          
+          echo "✅ Deployment completed!"
           EOF
         shell: bash
