@@ -41,16 +41,18 @@ func main() {
 		if err != nil {
 			log.Fatalf("invalid proxy address: %s\n", err)
 		}
-		ipifyClient, err := ip.New(&ip.Options{Proxies: []*url.URL{proxy}})
-		if err != nil {
-			log.Fatalf("failed to connect to api.ipify.org: %s\n", err)
+		for i := range 3 {
+			ipifyClient, err := ip.New(&ip.Options{Proxies: []*url.URL{proxy}})
+			if err != nil {
+				log.Fatalf("failed to connect to api.ipify.org: %s\n", err)
+			}
+			ip, err := ipifyClient.GetIp(context.Background())
+			if err != nil {
+				log.Fatalf("failed to fetch ip info: %s\n", err)
+			}
+			log.Printf("[%s] %s (%d)...\n", proxy.String(), ip, i+1)
+			proxies = append(proxies, proxy)
 		}
-		ip, err := ipifyClient.GetIp(context.Background())
-		if err != nil {
-			log.Fatalf("failed to fetch ip info: %s\n", err)
-		}
-		log.Printf("[%s] %s\n", proxy.String(), ip)
-		proxies = append(proxies, proxy)
 	}
 
 	var rdb *redis.Client = nil
@@ -151,7 +153,7 @@ func main() {
 			msg := fmt.Sprintf("<a href=\"%s\">%s #%d</a>\n\nBid Cost: <b>%f</b> %s\nMin Sell: <b>%f</b> %s\nProfit: <b>%f</b>%% (%f %s)\n%sEnd in: %02d:%02d:%02d\n\n<b><a href=\"https://t.me/portals/market?startapp=7t5no1\">Portals</a></b> | <b><a href=\"https://t.me/tonnel_network_bot/gifts?startapp=ref_438949837\">Tonnel</a></b>", link, gf.Gift.Name, gf.Gift.GiftNum, bid, gf.Gift.Asset, gf.Floor, gf.Gift.Asset, profitPercentage*100, gf.Floor-bid, gf.Gift.Asset, portalMsg, hours, minutes, seconds)
 			go tgLogger.SendMessage(context.Background(), msg, true, nil, &telegram.InlineKeyboardMarkup{
 				InlineKeyboard: [][]telegram.InlineKeyboardButton{
-					{{Text: "Place Bid", URL: fmt.Sprintf("https://t.me/tonnel_network_bot/gift?startapp=%d", gf.Gift.GiftID)}}
+					{{Text: "Place Bid", URL: fmt.Sprintf("https://t.me/tonnel_network_bot/gift?startapp=%d", gf.Gift.GiftID)}},
 				},
 			})
 		}
