@@ -37,7 +37,7 @@ func LoadConfig(path string) (*Config, error) {
 	viper.SetDefault("gifts_offset", 0)
 	viper.SetDefault("gifts_per_fetch", 30)
 	viper.SetDefault("concurrent_requests", 5)
-	viper.SetDefault("min_profit", 0.02)
+	viper.SetDefault("min_profit", 0.08)
 	viper.SetDefault("min_profit_ton", 0.0)
 	viper.SetDefault("rare_backdrops", []string{"Black"})
 	viper.SetDefault("min_bids", 0)
