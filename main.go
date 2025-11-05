@@ -69,7 +69,7 @@ func main() {
 			log.Fatalf("connection to redis failed: %v", err)
 		}
 	} else {
-		log.Printf("[warning] no redis connection")
+		log.Printf("[warning] NO REDIS ADDRESS PROVIDED")
 	}
 
 	tgLogger := telegram.NewLogger(cfg.Token, cfg.ChatID)
